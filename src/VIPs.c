@@ -99,8 +99,8 @@ typedef struct appdata {
 	Evas_Object *win;
 	Evas_Object *conform;
 	Evas_Object *label;
-	Evas_Object *label0; /* Whether the accelerator sensor is supported */
-	Evas_Object *label1; /* Current acceleration value */
+	Evas_Object *label0; /* write request value */
+	Evas_Object *label1; /* Current Movement counter */
 	Evas_Object *label2; /* Maximum acceleration value */
 } appdata_s;
 
@@ -290,26 +290,37 @@ void __bt_gatt_server_write_value_requested_cb(const char *remote_address,
 		int request_id, bt_gatt_server_h server, bt_gatt_h gatt_handle,
 		bool response_needed, int offset, const char *value, int len,
 		void *user_data) {
+	appdata_s *ad = (appdata_s*) user_data;
+	char buf[PATH_MAX];
 	int ret;
+	char *str;
+	str = (char *) malloc(2);
+	strcpy(str, value);
+
 	dlog_print(DLOG_INFO, LOG_TAG, "write the value");
 
-	ret = bt_gatt_set_value(gatt_handle, value, len);
-	if (ret == BT_ERROR_NONE)
-		dlog_print(DLOG_INFO, LOG_TAG, "write Success");
+//	ret = bt_gatt_set_value(gatt_handle, value, len);
+//	if (ret == BT_ERROR_NONE)
+//		dlog_print(DLOG_INFO, LOG_TAG, "write Success");
 
-	ret = bt_gatt_server_notify_characteristic_changed_value(gattChara,
-			ServerNotificationSentCB, NULL, NULL);
-	if (ret != BT_ERROR_NONE) {
-		char* err;
-		err = get_error_message(ret);
-		dlog_print(DLOG_ERROR, LOG_TAG,
-				"send notification callback failed. err = %s", err);
-	} else {
-		dlog_print(DLOG_INFO, LOG_TAG, "send notification callback Succeed");
-	}
+//	ret = bt_gatt_server_notify_characteristic_changed_value(gattChara,
+//			ServerNotificationSentCB, NULL, NULL);
+//	if (ret != BT_ERROR_NONE) {
+//		char* err;
+//		err = get_error_message(ret);
+//		dlog_print(DLOG_ERROR, LOG_TAG,
+//				"send notification callback failed. err = %s", err);
+//	} else {
+//		dlog_print(DLOG_INFO, LOG_TAG, "send notification callback Succeed");
+//	}
 	char *response_value = value;
 	bt_gatt_server_send_response(request_id, BT_GATT_REQUEST_TYPE_WRITE, offset,
 			BT_ERROR_NONE, response_value, len);
+	dlog_print(DLOG_INFO, LOG_TAG, value);
+
+	sprintf(buf, "R: %s", str);
+	elm_object_text_set(ad->label0, buf);
+	dlog_print(DLOG_INFO, LOG_TAG, "finish write display, %d", len);
 }
 
 void create_advertise() {
@@ -426,7 +437,7 @@ void create_advertise() {
 	}
 }
 
-void createService() {
+void createService(appdata_s *ad) {
 	dlog_print(DLOG_INFO, LOG_TAG, "Create Service");
 	int ret = bt_gatt_server_initialize();
 	if (ret != BT_ERROR_NONE) {
@@ -485,7 +496,7 @@ void createService() {
 		dlog_print(DLOG_INFO, LOG_TAG, "create read request Succeed");
 	}
 	ret = bt_gatt_server_set_write_value_requested_cb(gattChara,
-			__bt_gatt_server_write_value_requested_cb, NULL);
+			__bt_gatt_server_write_value_requested_cb, ad);
 	if (ret != BT_ERROR_NONE) {
 		char* err;
 		err = get_error_message(ret);
@@ -717,6 +728,10 @@ static void btn_clicked_init_max_acc_value(void *data, Evas_Object *obj,
 		elm_object_text_set(obj, "PLAY");
 	}
 }
+void exit_tizen(void *data, Evas_Object *obj, void *event_info) {
+	appdata_s *ad = (appdata_s*) data;
+	ui_app_exit();
+}
 
 static void create_base_gui(appdata_s *ad) {
 	/* Window */
@@ -759,24 +774,25 @@ static void create_base_gui(appdata_s *ad) {
 	/* First label (for the sensor support) */
 	ad->label0 = elm_label_add(ad->conform);
 	elm_object_text_set(ad->label0, "-");
-	my_box_pack(box, ad->label0, 1.5, 0.0, -1.0, -1.0);
+	my_box_pack(box, ad->label0, 1.5, 1.0, 0.5, -1.0);
 
-	/* Second label (for the current acceleration value) */
+	/* Second label (for the current Movemenr counter) */
 	ad->label1 = elm_label_add(ad->conform);
 	elm_object_text_set(ad->label1, "-");
-	my_box_pack(box, ad->label1, 1.0, 1.0, -1.0, -1.0);
+	my_box_pack(box, ad->label1, 1.0, 1.0, 0.5, -1.0);
 
 	/* Button */
 	Evas_Object *btn = elm_button_add(ad->conform);
 	elm_object_text_set(btn, "START");
 	evas_object_smart_callback_add(btn, "clicked",
 			btn_clicked_init_max_acc_value, ad);
-	my_box_pack(box, btn, 1.0, 0.0, -1.0, -1.0);
+	my_box_pack(box, btn, 1.0, 1.0, -1.0, -1.0);
 
-	/* Third label (for the maximum value) */
-	ad->label2 = elm_label_add(ad->conform);
-	elm_object_text_set(ad->label2, "-");
-	my_box_pack(box, ad->label2, 1.0, 1.0, 0.5, -1.0);
+	/* Button */
+	Evas_Object *btn2 = elm_button_add(ad->conform);
+	elm_object_text_set(btn2, "Exit");
+	evas_object_smart_callback_add(btn2, "clicked", exit_tizen, ad);
+	my_box_pack(box, btn2, 1.0, 1.0, -1.0, -1.0);
 
 	/* Show the window after the base GUI is set up */
 	evas_object_show(ad->win);
@@ -794,7 +810,7 @@ static bool app_create(void *data) {
 
 	init_bt();
 	create_base_gui(ad);
-	createService();
+	createService(ad);
 	create_advertise();
 
 	return true;

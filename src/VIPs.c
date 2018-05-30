@@ -7,6 +7,7 @@
 #include <AL/alc.h>
 #include <dlog.h>
 #include <assert.h>
+#include <time.h>
 #include <sound_manager.h>
 #include <bluetooth.h>
 #include <sensor.h> //Library for the sensor usage
@@ -94,6 +95,10 @@ const char *charaValue = "4d6163426f6f6b416972372c32";
 static bt_gatt_h gattDescriptor = NULL;
 const char *DescUuid = "2902";
 const char *DescValue = "50";
+
+//Latency measure
+static float send_time;
+static float receive_time;
 
 typedef struct appdata {
 	Evas_Object *win;
@@ -290,6 +295,7 @@ void __bt_gatt_server_write_value_requested_cb(const char *remote_address,
 		int request_id, bt_gatt_server_h server, bt_gatt_h gatt_handle,
 		bool response_needed, int offset, const char *value, int len,
 		void *user_data) {
+	receive_time = get_current_millis();
 	appdata_s *ad = (appdata_s*) user_data;
 	char buf[PATH_MAX];
 	int ret;
@@ -317,10 +323,10 @@ void __bt_gatt_server_write_value_requested_cb(const char *remote_address,
 	bt_gatt_server_send_response(request_id, BT_GATT_REQUEST_TYPE_WRITE, offset,
 			BT_ERROR_NONE, response_value, len);
 	dlog_print(DLOG_INFO, LOG_TAG, value);
-
+	float interval = receive_time - send_time;
+	dlog_print(DLOG_INFO, LOG_TAG, "Send-Receive Interval:  %f ", interval);
 	sprintf(buf, "R: %s", str);
 	elm_object_text_set(ad->label0, buf);
-	dlog_print(DLOG_INFO, LOG_TAG, "finish write display, %d", len);
 }
 
 void create_advertise() {
@@ -579,8 +585,9 @@ void changeCharaValue() {
 	if (ret == BT_ERROR_NONE)
 		dlog_print(DLOG_INFO, LOG_TAG, "Success");
 
+	send_time = get_current_millis();
 	ret = bt_gatt_server_notify_characteristic_changed_value(gattChara,
-			ServerNotificationSentCB, NULL, "01");
+			ServerNotificationSentCB, NULL, NULL);
 	if (ret != BT_ERROR_NONE) {
 		char* err;
 		err = get_error_message(ret);
@@ -675,18 +682,11 @@ static void _new_sensor_value(sensor_h sensor, sensor_event_s *sensor_data,
 	if (d_ax > prediciton_factor
 			&& ((last_timestamp + release_time) < get_current_millis())) {
 		last_timestamp = get_current_millis();
-		//play
-		/********************/
-		//play_sound(ad,0);
-		/********************/
 		play_sound();
 
-//		changeRead();
+//		send_time = get_current_millis();
 		changeCharaValue();
 		movment_counter++;
-		// hop_end=get_current_millis();
-		// sprintf(buf, "lag :%.1f ",(hop_end-hop_start));
-		// elm_object_text_set(ad->label2,buf);
 	} else {
 		sprintf(buf, "X :%d ", movment_counter);
 		elm_object_text_set(ad->label1, buf);
@@ -730,6 +730,21 @@ static void btn_clicked_init_max_acc_value(void *data, Evas_Object *obj,
 }
 void exit_tizen(void *data, Evas_Object *obj, void *event_info) {
 	appdata_s *ad = (appdata_s*) data;
+	int ret;
+	/* Deregister callbacks */
+	bt_adapter_unset_state_changed_cb();
+	bt_adapter_unset_device_discovery_state_changed_cb();
+	bt_device_unset_service_searched_cb();
+	bt_socket_unset_data_received_cb();
+	bt_socket_unset_connection_state_changed_cb();
+
+	/* Release resources */
+
+	/* Deinitialize Bluetooth */
+	ret = bt_deinitialize();
+	if (ret != BT_ERROR_NONE)
+		dlog_print(DLOG_ERROR, LOG_TAG, "[bt_deinitialize] failed.");
+	stop_accelerator_sensor(ad);
 	ui_app_exit();
 }
 
@@ -835,6 +850,21 @@ static void app_resume(void *data) {
 static void app_terminate(void *data) {
 	/* Release all resources. */
 	appdata_s *ad = data;
+	int ret;
+
+	/* Deregister callbacks */
+	bt_adapter_unset_state_changed_cb();
+	bt_adapter_unset_device_discovery_state_changed_cb();
+	bt_device_unset_service_searched_cb();
+	bt_socket_unset_data_received_cb();
+	bt_socket_unset_connection_state_changed_cb();
+
+	/* Release resources */
+
+	/* Deinitialize Bluetooth */
+	ret = bt_deinitialize();
+	if (ret != BT_ERROR_NONE)
+		dlog_print(DLOG_ERROR, LOG_TAG, "[bt_deinitialize] failed.");
 	stop_accelerator_sensor(ad);
 }
 

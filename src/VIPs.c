@@ -30,12 +30,14 @@ static float last_timestamp = 0;
 
 //opt
 static float last_x = 0;
+static float last_z = 0;
 //counter of recorded value accelerometer
 static int counter_a = 0;
 static int pressed = 0;
 static int record = 0;
 //d_ax = a(x0+T)-a(x0) where T is the sampling period so,a(x0+T)=a(x1)
 static float d_ax = 0;
+static float d_gz = 0; //
 int flag_lag = 0;
 
 // Variables for audio-playback
@@ -100,14 +102,14 @@ const char *DescValue = "50";
 static float send_time;
 static float receive_time;
 
-typedef struct appdata {
-	Evas_Object *win;
-	Evas_Object *conform;
-	Evas_Object *label;
-	Evas_Object *label0; /* write request value */
-	Evas_Object *label1; /* Current Movement counter */
-	Evas_Object *label2; /* Maximum acceleration value */
-} appdata_s;
+//typedef struct appdata {
+//	Evas_Object *win;
+//	Evas_Object *conform;
+//	Evas_Object *label;
+//	Evas_Object *label0; /* write request value */
+//	Evas_Object *label1; /* Current Movement counter */
+//	Evas_Object *label2; /* Maximum acceleration value */
+//} appdata_s;
 
 struct _sensor_info {
 	sensor_h sensor; /* Sensor handle */
@@ -117,6 +119,14 @@ typedef struct _sensor_info sensorinfo_s;
 
 static sensorinfo_s sensor_info;
 static sensorinfo_s sensor_info_gyro;
+
+static bt_advertiser_h advertiser = NULL;
+//	set the LE state change callback
+bt_adapter_le_advertising_state_changed_cb cb;
+const char *time_svc_uuid_16 = "1805";
+char service_data[] = { 0x02, 0x01, 0x01 };
+
+static char *lastWrite = NULL;
 
 /**
  * this function returns the cutted current time in millisecond in float type
@@ -299,11 +309,12 @@ void __bt_gatt_server_write_value_requested_cb(const char *remote_address,
 	appdata_s *ad = (appdata_s*) user_data;
 	char buf[PATH_MAX];
 	int ret;
-	char *str;
-	str = (char *) malloc(2);
-	strcpy(str, value);
+	char str[len + 1];
+	str[len] = '\0';
+	//str = (char *) malloc(len);
+	strncpy(str, value, len);
 
-	dlog_print(DLOG_INFO, LOG_TAG, "write the value");
+	dlog_print(DLOG_INFO, LOG_TAG, "write the value: %s", str);
 
 //	ret = bt_gatt_set_value(gatt_handle, value, len);
 //	if (ret == BT_ERROR_NONE)
@@ -320,21 +331,43 @@ void __bt_gatt_server_write_value_requested_cb(const char *remote_address,
 //		dlog_print(DLOG_INFO, LOG_TAG, "send notification callback Succeed");
 //	}
 	char *response_value = value;
+
 	bt_gatt_server_send_response(request_id, BT_GATT_REQUEST_TYPE_WRITE, offset,
 			BT_ERROR_NONE, response_value, len);
-	dlog_print(DLOG_INFO, LOG_TAG, value);
-	float interval = receive_time - send_time;
-	dlog_print(DLOG_INFO, LOG_TAG, "Send-Receive Interval:  %f ", interval);
-	sprintf(buf, "R: %s", str);
+//	dlog_print(DLOG_INFO, LOG_TAG, value);
+//	float interval = receive_time - send_time;
+//	dlog_print(DLOG_INFO, LOG_TAG, "Send-Receive Interval:  %f ", interval);
+//	sprintf(buf, "R: %5.0f", interval);
+	if (lastWrite == NULL) {
+		lastWrite = "0";
+	}
+
+	if (strcmp(str, "1") == 0) {
+		if (strcmp(str, lastWrite) == 0) {
+		} else {
+			changeAlgoTo("algo1", ad);
+		}
+		sprintf(buf, "Algo: algo1", len, str);
+	} else if (strcmp(str, "2") == 0) {
+		if (strcmp(str, lastWrite) == 0) {
+		} else {
+			changeAlgoTo("algo2", ad);
+		}
+		sprintf(buf, "Algo: algo2", len, str);
+	} else {
+		sprintf(buf, "Algo: error", len, str);
+	}
+	lastWrite = str;
 	elm_object_text_set(ad->label0, buf);
 }
 
 void create_advertise() {
 	dlog_print(DLOG_INFO, LOG_TAG, "Start advertise");
 
-	static bt_advertiser_h advertiser = NULL;
 	static bt_advertiser_h advertiser_list[3] = { NULL, };
 	static int advertiser_index = 0;
+
+	int mode = BT_ADAPTER_LE_ADVERTISING_MODE_LOW_LATENCY;
 
 	int manufacturer_id = 117;
 	char *manufacture = NULL;
@@ -342,8 +375,6 @@ void create_advertise() {
 	char manufacture_1[] = { 0x01, 0x01, 0x01, 0x01 };
 	char manufacture_2[] = { 0x02, 0x02, 0x02, 0x02 };
 	char manufacture_3[] = { 0x03, 0x03, 0x03, 0x03 };
-	char service_data[] = { 0x01, 0x02, 0x02 };
-	const char *time_svc_uuid_16 = "1805";
 	const char *battery_svc_uuid_16 = "180f";
 	const char *heart_rate_svc_uuid_16 = "180d";
 	const char *immediate_alert_svc_uuid_16 = "1802";
@@ -382,6 +413,10 @@ void create_advertise() {
 					ret);
 	}
 
+	ret = bt_adapter_le_set_advertising_mode(advertiser, mode);
+	if (ret != BT_ERROR_NONE)
+		dlog_print(DLOG_INFO, LOG_TAG, "add scan response data [0x%04x]", ret);
+
 	ret = bt_adapter_le_add_advertising_service_uuid(advertiser,
 			BT_ADAPTER_LE_PACKET_ADVERTISING, time_svc_uuid_16);
 	if (ret != BT_ERROR_NONE)
@@ -394,12 +429,6 @@ void create_advertise() {
 
 	ret = bt_adapter_le_add_advertising_service_solicitation_uuid(advertiser,
 			BT_ADAPTER_LE_PACKET_ADVERTISING, heart_rate_svc_uuid_16);
-	if (ret != BT_ERROR_NONE)
-		dlog_print(DLOG_INFO, LOG_TAG, "add service_solicitation_uuid [0x%04x]",
-				ret);
-
-	ret = bt_adapter_le_add_advertising_service_solicitation_uuid(advertiser,
-			BT_ADAPTER_LE_PACKET_ADVERTISING, immediate_alert_svc_uuid_16);
 	if (ret != BT_ERROR_NONE)
 		dlog_print(DLOG_INFO, LOG_TAG, "add service_solicitation_uuid [0x%04x]",
 				ret);
@@ -441,6 +470,28 @@ void create_advertise() {
 		errMsg = get_error_message(ret);
 		dlog_print(DLOG_ERROR, LOG_TAG, "Advertising failed. err = %s", errMsg);
 	}
+}
+
+void changeAdvertisingServiceData(char *ads) {
+
+	if (strcmp(ads, "00") == 0) {
+		service_data[0] = 0x00;
+	} else if (strcmp(ads, "01") == 0) {
+		service_data[0] = 0x01;
+	} else if (strcmp(ads, "02") == 0) {
+		service_data[0] = 0x02;
+	} else if (strcmp(ads, "03") == 0) {
+		service_data[0] = 0x03;
+	} else if (strcmp(ads, "04") == 0) {
+		service_data[0] = 0x04;
+	} else if (strcmp(ads, "05") == 0) {
+		service_data[0] = 0x05;
+	} else {
+		service_data[0] = 0x99;
+		dlog_print(DLOG_ERROR, LOG_TAG, "changeAdvertisingServiceData failed");
+	}
+	dlog_print(DLOG_INFO, LOG_TAG, "change Value");
+	create_advertise();
 }
 
 void createService(appdata_s *ad) {
@@ -567,8 +618,9 @@ void createService(appdata_s *ad) {
 
 void changeCharaValue() {
 	int ret;
+	dlog_print(DLOG_INFO, LOG_TAG, "Change the value");
 	if (lastResponse == NULL || lastResponse == "05") {
-		response = "01";
+		response = ("01");
 	} else {
 		int a;
 		/* for loop execution */
@@ -579,9 +631,16 @@ void changeCharaValue() {
 		}
 	}
 	lastResponse = response;
-	dlog_print(DLOG_INFO, LOG_TAG, "Change the value");
+	dlog_print(DLOG_INFO, LOG_TAG, "Change the value %s", response);
 
-	ret = bt_gatt_set_value(gattChara, response, 2);
+//	changeAdvertisingServiceData(response);
+	char c[10];
+	sprintf(c, "%.f", get_current_millis());
+	dlog_print(DLOG_INFO, LOG_TAG, c);
+	response = c;
+//	strcat(response, c);
+
+	ret = bt_gatt_set_value(gattChara, response, strlen(response));
 	if (ret == BT_ERROR_NONE)
 		dlog_print(DLOG_INFO, LOG_TAG, "Success");
 
@@ -638,19 +697,6 @@ static float get_absolute_max(float value1, float value2) {
 /*********************************************************************************************/
 
 /**
- * Shows if the sensor is supported and display the result in label0
- */
-static void show_is_supported(appdata_s *ad) {
-	char buf[PATH_MAX];
-	bool is_supported = false;
-	sensor_is_supported(SENSOR_ACCELEROMETER, &is_supported);
-//sensor_is_supported(SENSOR_GYROSCOPE, &is_supported)
-	sprintf(buf, "Acceleration sensor",
-			is_supported ? "support" : "not support");
-	elm_object_text_set(ad->label0, buf);
-}
-
-/**
  * the callback from accelerometer
  *
  */
@@ -693,6 +739,38 @@ static void _new_sensor_value(sensor_h sensor, sensor_event_s *sensor_data,
 	}
 	last_x = current_x;
 }
+static void _new_gyro_value(sensor_h sensor, sensor_event_s *sensor_data,
+		void *user_data) {
+	float current_z = sensor_data->values[2];//extracting the Z gyroscope data
+
+	if (sensor_data->value_count < 3)	//sensor not working correctly
+		return;
+
+	char buf[PATH_MAX];
+	appdata_s *ad = (appdata_s*) user_data;
+	sprintf(buf, "X : %0.1f / Y : %0.1f / Z : %0.1f", sensor_data->values[0],
+			sensor_data->values[1], sensor_data->values[2]);
+
+	//set the label text
+	elm_object_text_set(ad->label1, buf);
+
+	//update the derivative
+	d_gz = current_z - last_z;
+
+	//slope prediction
+	if (current_z > 0 && d_gz > prediciton_factor
+			&& ((last_timestamp + release_time) < get_current_millis())) {//current_z>0 is done to check when the hand is moving downward and a positve angular velocity is generated
+																		  // when the hand makes a hit of medium or hard intensity, the prediction factor touches atleast 35.
+																		  //release time is according to how long a standard hit takes time to be made
+		last_timestamp = get_current_millis();
+		changeCharaValue();
+		movment_counter++;
+	} else {
+		sprintf(buf, "X :%d ", movment_counter);
+		elm_object_text_set(ad->label1, buf);
+	}
+	last_z = current_z;
+}
 
 static void start_accelerator_sensor(appdata_s *ad, int af) {
 	sensor_error_e err = SENSOR_ERROR_NONE;
@@ -704,10 +782,38 @@ static void start_accelerator_sensor(appdata_s *ad, int af) {
 	sensor_listener_start(sensor_info.sensor_listener);
 }
 
+static void start_gyroscope_sensor(appdata_s *ad, int gf) {
+	sensor_error_e err = SENSOR_ERROR_NONE;
+	sensor_get_default_sensor(SENSOR_GYROSCOPE, &sensor_info_gyro.sensor);
+	err = sensor_create_listener(sensor_info_gyro.sensor,
+			&sensor_info_gyro.sensor_listener);
+	sensor_listener_set_event_cb(sensor_info_gyro.sensor_listener, gf,
+			_new_gyro_value, ad);
+	sensor_listener_start(sensor_info_gyro.sensor_listener);
+}
 static void stop_accelerator_sensor(appdata_s *ad) {
 	sensor_listener_stop(sensor_info.sensor_listener);
 }
 
+static void stop_gyroscope_sensor(appdata_s *ad) {
+	sensor_listener_stop(sensor_info_gyro.sensor_listener);
+}
+
+static void changeAlgoTo(char *algo, appdata_s *ad) {
+	if (strcmp(algo, "algo1") == 0) {
+//		use the algo from Andrea
+		prediciton_factor = 7;
+		release_time = 150;
+		stop_gyroscope_sensor(ad);
+		start_accelerator_sensor(ad, af_interval);
+	} else if (strcmp(algo, "algo2") == 0) {
+//		use the algo from dipster
+		prediciton_factor = 35;
+		release_time = 170;
+		stop_accelerator_sensor(ad);
+		start_gyroscope_sensor(ad, gf_interval);
+	}
+}
 /* Button click event function */
 static void btn_clicked_init_max_acc_value(void *data, Evas_Object *obj,
 		void *event_info) {
@@ -747,7 +853,6 @@ void exit_tizen(void *data, Evas_Object *obj, void *event_info) {
 	stop_accelerator_sensor(ad);
 	ui_app_exit();
 }
-
 static void create_base_gui(appdata_s *ad) {
 	/* Window */
 	/* Create and initialize elm_win.
@@ -781,8 +886,10 @@ static void create_base_gui(appdata_s *ad) {
 
 	/* Box can contain other elements in a vertical line (by default) */
 	Evas_Object *box = elm_box_add(ad->win);
-	evas_object_size_hint_weight_set(box, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
-	evas_object_size_hint_align_set(box, EVAS_HINT_EXPAND, EVAS_HINT_EXPAND);
+	evas_object_size_hint_weight_set(box, EVAS_HINT_EXPAND,
+	EVAS_HINT_EXPAND);
+	evas_object_size_hint_align_set(box, EVAS_HINT_EXPAND,
+	EVAS_HINT_EXPAND);
 	elm_object_content_set(ad->conform, box);
 	evas_object_show(box);
 
@@ -827,7 +934,6 @@ static bool app_create(void *data) {
 	create_base_gui(ad);
 	createService(ad);
 	create_advertise();
-
 	return true;
 }
 

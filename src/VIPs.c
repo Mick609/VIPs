@@ -13,6 +13,7 @@
 #include <sensor.h> //Library for the sensor usage
 #define DR_WAV_IMPLEMENTATION
 #include "dr_wav.h"
+#include <math.h>
 
 //interval in millisecond for accelerometer
 #define af_interval 5// 2-->500HZ, 3-->333HZ, 4-->250HZ, 5-->200HZ 10-->100HZ
@@ -75,9 +76,9 @@ const char *mac_address = "7C:04:D0:C5:A3:61";
 const char *service_uuid = "180A";
 bt_gatt_service_type_e type = BT_GATT_SERVICE_TYPE_PRIMARY;
 
-char *response = "00";
-char *tick_response[] = { "01", "02", "03", "04", "05" };
-char *lastResponse = NULL;
+char *response = "0";
+char *tick_response[] = { "1", "2", "3", "4", "5" };
+char *lastResponse = "0";
 
 //client handle
 bt_gatt_client_h client = NULL;
@@ -101,6 +102,26 @@ const char *DescValue = "50";
 //Latency measure
 static float send_time;
 static float receive_time;
+
+const char *statusIdle = "idle";
+const char *statusListen = "listen";
+const char *statusSuspend = "suspend";
+static char *sensorStatus;
+static long startingPoint = 0;
+const long listeningTime = 100;
+const long suspendingTime = 200;
+
+static long recordAccCount = 0;
+static long recordGyroCount = 0;
+
+static float recordAccX[20];
+static float recordGyroX[20];
+
+static float recordAccY[20];
+static float recordGyroY[20];
+
+static float recordAccZ[20];
+static float recordGyroZ[20];
 
 //typedef struct appdata {
 //	Evas_Object *win;
@@ -139,6 +160,202 @@ static float get_current_millis() {
 			+ spec.tv_nsec / 1000000LL;
 	k = current_time_ms % LLF_CONVERSION;
 	return k;
+}
+float calculateSD(float data[]) {
+	long sum = 0.0, mean, standardDeviation = 0.0;
+
+	int i;
+
+	for (i = 0; i < 10; ++i) {
+		sum += data[i];
+	}
+
+	mean = sum / 10;
+
+	for (i = 0; i < 10; ++i)
+		standardDeviation += pow(data[i] - mean, 2);
+
+	return sqrt(standardDeviation / 10);
+}
+
+float *maxAndMinAndSum(float data[]) {
+	int size = 20;
+
+	float min = 0;
+	float max = 0;
+
+	float sum = 0;
+
+	for (int i = 0; i < size; i++) {
+		sum = sum + data[i];
+		if (i == 0) {
+			min = data[0];
+			max = data[0];
+		} else {
+			if (min != fminf(data[i], min)) {
+				min = data[i];
+			}
+			if (max != fmaxf(data[i], max)) {
+				max = data[i];
+			}
+		}
+	}
+	float ret[3];
+	ret[0] = max;
+	ret[1] = min;
+	ret[2] = sum;
+	return ret;
+}
+
+static float Logistic(float x) {
+	return (1 / (1 + exp(-x)));
+}
+static float *Softmax(float x1, float x2, float x3) {
+	float inputs[] = { x1, x2, x3 };
+	float softmax[] = { 0, 0, 0 };
+	float sum = 0;
+
+	for (int i = 0; i < 3; i++) {
+		sum += exp(inputs[i]);
+	}
+
+	for (int i = 0; i < 3; i++) {
+		softmax[i] = exp(inputs[i]) / sum;
+	}
+	return softmax;
+}
+
+//Trained model in code
+static void expression(void *data, float variable_1, float variable_2,
+		float variable_3, float variable_4, float variable_5, float variable_6,
+		float variable_7, float variable_8, float variable_9, float variable_10,
+		float variable_11, float variable_12, float variable_13,
+		float variable_14, float variable_15, float variable_16,
+		float variable_17, float variable_18, float variable_19,
+		float variable_20, float variable_21, float variable_22,
+		float variable_23, float variable_24) {
+	appdata_s *ad = data;
+	char buf[PATH_MAX];
+	float scaled_variable_1 = (variable_1 - 12.6703) / 5.01258;
+	float scaled_variable_2 = (variable_2 - 3.93215) / 8.60969;
+	float scaled_variable_3 = (variable_3 - 19.4126) / 6.76107;
+	float scaled_variable_4 = (variable_4 - 92.8492) / 52.795;
+	float scaled_variable_5 = (variable_5 + 18.6896) / 80.342;
+	float scaled_variable_6 = (variable_6 - 21.0222) / 75.9633;
+	float scaled_variable_7 = (variable_7 + 1.07827) / 3.64859;
+	float scaled_variable_8 = (variable_8 + 9.78093) / 6.50965;
+	float scaled_variable_9 = (variable_9 - 0.370732) / 11.6911;
+	float scaled_variable_10 = (variable_10 + 94.02) / 83.373;
+	float scaled_variable_11 = (variable_11 + 315.636) / 108.635;
+	float scaled_variable_12 = (variable_12 + 108.239) / 110.417;
+	float scaled_variable_13 = (variable_13 - 109.367) / 51.1144;
+	float scaled_variable_14 = (variable_14 + 44.2812) / 162.789;
+	float scaled_variable_15 = (variable_15 - 183.716) / 190.547;
+	float scaled_variable_16 = (variable_16 - 24.6541) / 1123.16;
+	float scaled_variable_17 = (variable_17 + 3853.52) / 1811.63;
+	float scaled_variable_18 = (variable_18 + 1034.69) / 1866.33;
+	float scaled_variable_19 = (variable_19 - 3.05721) / 2.11778;
+	float scaled_variable_20 = (variable_20 - 2.38248) / 1.74392;
+	float scaled_variable_21 = (variable_21 - 3.05765) / 1.96718;
+	float scaled_variable_22 = (variable_22 - 33.5419) / 20.9815;
+	float scaled_variable_23 = (variable_23 - 49.6667) / 31.0831;
+	float scaled_variable_24 = (variable_24 - 20.9051) / 16.0562;
+
+	float y_1_1 = Logistic(
+			-1.18521 + 0.0701464 * scaled_variable_1
+					+ 2.56027 * scaled_variable_2 + 0.6252 * scaled_variable_3
+					- 1.00917 * scaled_variable_4 - 0.618316 * scaled_variable_5
+					- 1.51263 * scaled_variable_6 + 0.537774 * scaled_variable_7
+					- 0.0619793 * scaled_variable_8
+					- 0.178235 * scaled_variable_9
+					+ 0.0738867 * scaled_variable_10
+					- 1.41077 * scaled_variable_11
+					- 3.79314 * scaled_variable_12 - 1.0086 * scaled_variable_13
+					+ 1.51671 * scaled_variable_14
+					+ 0.628457 * scaled_variable_15
+					- 0.086686 * scaled_variable_16
+					- 0.203457 * scaled_variable_17
+					- 2.71377 * scaled_variable_18
+					- 0.508664 * scaled_variable_19
+					+ 1.56511 * scaled_variable_20
+					- 0.214423 * scaled_variable_21
+					- 0.234193 * scaled_variable_22
+					- 0.130027 * scaled_variable_23
+					+ 1.1992 * scaled_variable_24);
+	float y_1_2 = Logistic(
+			0.74521 - 0.117051 * scaled_variable_1 - 2.76736 * scaled_variable_2
+					- 0.931835 * scaled_variable_3 + 1.52009 * scaled_variable_4
+					+ 0.881154 * scaled_variable_5 + 1.92887 * scaled_variable_6
+					- 0.640522 * scaled_variable_7 + 0.48555 * scaled_variable_8
+					- 0.652122 * scaled_variable_9
+					- 0.341161 * scaled_variable_10
+					+ 0.929843 * scaled_variable_11
+					+ 3.3963 * scaled_variable_12 + 1.18705 * scaled_variable_13
+					- 2.29742 * scaled_variable_14
+					+ 0.153115 * scaled_variable_15
+					- 0.58605 * scaled_variable_16
+					+ 0.832215 * scaled_variable_17
+					+ 3.12628 * scaled_variable_18
+					+ 0.611118 * scaled_variable_19
+					- 1.60204 * scaled_variable_20
+					- 0.270977 * scaled_variable_21
+					+ 0.657833 * scaled_variable_22
+					- 0.0960526 * scaled_variable_23
+					- 1.41523 * scaled_variable_24);
+	float y_1_3 = Logistic(
+			3.29255 - 0.593192 * scaled_variable_1 + 1.00577 * scaled_variable_2
+					- 0.406019 * scaled_variable_3
+					- 0.927232 * scaled_variable_4 - 1.8474 * scaled_variable_5
+					+ 0.499465 * scaled_variable_6
+					- 0.428867 * scaled_variable_7 - 1.86737 * scaled_variable_8
+					- 0.363737 * scaled_variable_9
+					- 1.29025 * scaled_variable_10
+					- 2.41469 * scaled_variable_11
+					- 0.985284 * scaled_variable_12
+					- 1.90178 * scaled_variable_13
+					- 0.202464 * scaled_variable_14
+					+ 0.0164118 * scaled_variable_15
+					- 1.36293 * scaled_variable_16
+					- 2.14009 * scaled_variable_17
+					- 0.219123 * scaled_variable_18
+					- 0.834949 * scaled_variable_19
+					+ 1.39851 * scaled_variable_20
+					+ 0.708755 * scaled_variable_21
+					+ 0.149786 * scaled_variable_22
+					+ 1.04075 * scaled_variable_23
+					+ 1.33764 * scaled_variable_24);
+
+	float non_probabilistic_variable_25 = Logistic(
+			0.14876 - 2.11316 * y_1_1 + 3.59279 * y_1_2 - 10.2615 * y_1_3);
+	float non_probabilistic_variable_26 = Logistic(
+			-8.42531 - 9.62206 * y_1_1 + 2.70845 * y_1_2 + 11.6224 * y_1_3);
+	float non_probabilistic_variable_27 = Logistic(
+			2.04104 + 8.62543 * y_1_1 - 5.90975 * y_1_2 - 3.37696 * y_1_3);
+	float softmax[3];
+	float *pointer;
+	int i;
+
+	pointer = Softmax(non_probabilistic_variable_25,
+			non_probabilistic_variable_26, non_probabilistic_variable_27);
+
+	float variable_25 = *(pointer);
+	float variable_26 = *(pointer + 1);
+	float variable_27 = *(pointer + 2);
+
+	char *gesture;
+	float max = fmaxf(fmaxf(variable_25, variable_26), variable_27);
+
+	if (max == variable_25) {
+		gesture = "0";
+	} else if (max == variable_26) {
+		gesture = "1";
+	} else if (max == variable_27) {
+		gesture = "2";
+	}
+
+	changeCharaValue(gesture);
+	sprintf(buf, "*s", gesture);
+	dlog_print(DLOG_INFO, LOG_TAG, buf);
 }
 
 /************************************************************************************/
@@ -345,13 +562,13 @@ void __bt_gatt_server_write_value_requested_cb(const char *remote_address,
 	if (strcmp(str, "1") == 0) {
 		if (strcmp(str, lastWrite) == 0) {
 		} else {
-			changeAlgoTo("algo1", ad);
+//			changeAlgoTo("algo1", ad);
 		}
 		sprintf(buf, "Algo: algo1", len, str);
 	} else if (strcmp(str, "2") == 0) {
 		if (strcmp(str, lastWrite) == 0) {
 		} else {
-			changeAlgoTo("algo2", ad);
+//			changeAlgoTo("algo2", ad);
 		}
 		sprintf(buf, "Algo: algo2", len, str);
 	} else {
@@ -616,7 +833,7 @@ void createService(appdata_s *ad) {
 	}
 }
 
-void changeCharaValue() {
+void changeCharaValue(char *gesture) {
 	int ret;
 	dlog_print(DLOG_INFO, LOG_TAG, "Change the value");
 	if (lastResponse == NULL || lastResponse == "05") {
@@ -637,8 +854,10 @@ void changeCharaValue() {
 	char c[10];
 	sprintf(c, "%.f", get_current_millis());
 	dlog_print(DLOG_INFO, LOG_TAG, c);
-	response = c;
+//	response = c;
 //	strcat(response, c);
+
+	response = gesture;
 
 	ret = bt_gatt_set_value(gattChara, response, strlen(response));
 	if (ret == BT_ERROR_NONE)
@@ -700,76 +919,166 @@ static float get_absolute_max(float value1, float value2) {
  * the callback from accelerometer
  *
  */
-static void _new_sensor_value(sensor_h sensor, sensor_event_s *sensor_data,
-		void *user_data) {
+//static void _new_sensor_value(sensor_h sensor, sensor_event_s *sensor_data,
+//		void *user_data) {
+//	char buf[PATH_MAX];
+//	appdata_s *ad = (appdata_s*) user_data;
+//	if (flag_lag == 0) {
+//		hop_start = get_current_millis();
+//		flag_lag = 1;
+//	} else {
+//		flag_lag = 0;
+//		hop_end = get_current_millis();
+//		sprintf(buf, "lag :%.0f ", (hop_end - hop_start));
+//		elm_object_text_set(ad->label2, buf);
+//	}
+//	float current_x = sensor_data->values[0];
+////int j=0;
+//	if (sensor_data->value_count < 3)
+//		return;
+//
+//	sprintf(buf, "X : %0.1f / Y : %0.1f / Z : %0.1f", sensor_data->values[0],
+//			sensor_data->values[1], sensor_data->values[2]);
+////set the label text
+//	elm_object_text_set(ad->label1, buf);
+////update the derivative
+//	d_ax = current_x - last_x;
+////slope prediction
+//	if (d_ax > prediciton_factor
+//			&& ((last_timestamp + release_time) < get_current_millis())) {
+//		last_timestamp = get_current_millis();
+//		play_sound();
+//
+////		send_time = get_current_millis();
+//		changeCharaValue();
+//		movment_counter++;
+//	} else {
+//		sprintf(buf, "X :%d ", movment_counter);
+//		elm_object_text_set(ad->label1, buf);
+//	}
+//	last_x = current_x;
+//}
+static void _new_accelerometer_value(sensor_h sensor,
+		sensor_event_s *sensor_data, void *user_data) {
 	char buf[PATH_MAX];
 	appdata_s *ad = (appdata_s*) user_data;
-	if (flag_lag == 0) {
-		hop_start = get_current_millis();
-		flag_lag = 1;
-	} else {
-		flag_lag = 0;
-		hop_end = get_current_millis();
-		sprintf(buf, "lag :%.0f ", (hop_end - hop_start));
-		elm_object_text_set(ad->label2, buf);
-	}
-	float current_x = sensor_data->values[0];
-//int j=0;
 	if (sensor_data->value_count < 3)
 		return;
 
-	sprintf(buf, "X : %0.1f / Y : %0.1f / Z : %0.1f", sensor_data->values[0],
-			sensor_data->values[1], sensor_data->values[2]);
-//set the label text
-	elm_object_text_set(ad->label1, buf);
-//update the derivative
-	d_ax = current_x - last_x;
-//slope prediction
-	if (d_ax > prediciton_factor
-			&& ((last_timestamp + release_time) < get_current_millis())) {
-		last_timestamp = get_current_millis();
-		play_sound();
+	char* sensorName = "accelerometer";
 
-//		send_time = get_current_millis();
-		changeCharaValue();
-		movment_counter++;
-	} else {
-		sprintf(buf, "X :%d ", movment_counter);
-		elm_object_text_set(ad->label1, buf);
+	float x = (sensor_data->values[0]);
+	float y = (sensor_data->values[1]);
+	float z = (sensor_data->values[2]);
+
+//	get the square of Euclidean Distance of X,Y, and Z
+	long sed = x * x + y * y + z * z;
+
+	if (strcmp(sensorStatus, statusIdle) == 0) {
+		if (sed > 250) {
+			startingPoint = (long) get_current_millis();
+			sensorStatus = statusListen;
+
+			recordAccCount = 0;
+			recordGyroCount = 0;
+		}
+	} else if (strcmp(sensorStatus, statusListen) == 0) {
+		if (get_current_millis() - startingPoint >= listeningTime) {
+			sensorStatus = statusSuspend;
+
+//			Data segmentation of XYZ data
+
+//			Sum of all 6 array (for arrays that have same size, sum shows the same feature as mean with less computation)
+//			Max and Min of all 6 arrays
+			float maxminsumAccX[3];
+			float maxminsumAccY[3];
+			float maxminsumAccZ[3];
+			float maxminsumGyroX[3];
+			float maxminsumGyroY[3];
+			float maxminsumGyroZ[3];
+
+			float *pointer;
+			int i;
+
+			pointer = maxAndMinAndSum(recordAccX);
+			for (i = 0; i < 3; i++) {
+				maxminsumAccX[i] = *(pointer + i);
+			}
+			pointer = maxAndMinAndSum(recordAccY);
+			for (i = 0; i < 3; i++) {
+				maxminsumAccY[i] = *(pointer + i);
+			}
+			pointer = maxAndMinAndSum(recordAccZ);
+			for (i = 0; i < 3; i++) {
+				maxminsumAccZ[i] = *(pointer + i);
+			}
+			pointer = maxAndMinAndSum(recordGyroX);
+			for (i = 0; i < 3; i++) {
+				maxminsumGyroX[i] = *(pointer + i);
+			}
+			pointer = maxAndMinAndSum(recordGyroY);
+			for (i = 0; i < 3; i++) {
+				maxminsumGyroY[i] = *(pointer + i);
+			}
+			pointer = maxAndMinAndSum(recordGyroZ);
+			for (i = 0; i < 3; i++) {
+				maxminsumGyroZ[i] = *(pointer + i);
+			}
+
+//			Standard Deviation for all 6 arrays
+			float SDAccX = calculateSD(recordAccX);
+			float SDAccY = calculateSD(recordAccY);
+			float SDAccZ = calculateSD(recordAccZ);
+			float SDGyroX = calculateSD(recordGyroX);
+			float SDGyroY = calculateSD(recordGyroY);
+			float SDGyroZ = calculateSD(recordGyroZ);
+
+			expression(ad, maxminsumAccX[0], maxminsumAccY[0], maxminsumAccZ[0],
+					maxminsumGyroX[0], maxminsumGyroY[0], maxminsumGyroZ[0],
+					maxminsumAccX[1], maxminsumAccY[1], maxminsumAccZ[1],
+					maxminsumGyroX[1], maxminsumGyroY[1], maxminsumGyroZ[1],
+					maxminsumAccX[2], maxminsumAccY[2], maxminsumAccZ[2],
+					maxminsumGyroX[2], maxminsumGyroY[2], maxminsumGyroZ[2],
+					SDAccX, SDAccY, SDAccZ, SDGyroX, SDGyroY, SDGyroZ);
+		}
+		if (recordAccCount < 20) {
+			recordAccX[recordAccCount] = x;
+			recordAccY[recordAccCount] = y;
+			recordAccZ[recordAccCount] = z;
+			recordAccCount++;
+		}
+
+	} else if (strcmp(sensorStatus, statusSuspend) == 0) {
+		if (get_current_millis() - startingPoint
+				>= listeningTime + suspendingTime) {
+			sensorStatus = statusIdle;
+		}
 	}
-	last_x = current_x;
 }
-static void _new_gyro_value(sensor_h sensor, sensor_event_s *sensor_data,
+static void _new_gyroscope_value(sensor_h sensor, sensor_event_s *sensor_data,
 		void *user_data) {
-	float current_z = sensor_data->values[2];//extracting the Z gyroscope data
-
-	if (sensor_data->value_count < 3)	//sensor not working correctly
-		return;
-
 	char buf[PATH_MAX];
 	appdata_s *ad = (appdata_s*) user_data;
-	sprintf(buf, "X : %0.1f / Y : %0.1f / Z : %0.1f", sensor_data->values[0],
-			sensor_data->values[1], sensor_data->values[2]);
+	if (sensor_data->value_count < 3)
+		return;
 
-	//set the label text
-	elm_object_text_set(ad->label1, buf);
+	char* sensorName = "gyroscope";
+	long x = (long) (sensor_data->values[0]);
+	long y = (long) (sensor_data->values[1]);
+	long z = (long) (sensor_data->values[2]);
 
-	//update the derivative
-	d_gz = current_z - last_z;
+	//	get the square of Euclidean Distance of X,Y, and Z
+	long sed = x * x + y * y + z * z;
 
-	//slope prediction
-	if (current_z > 0 && d_gz > prediciton_factor
-			&& ((last_timestamp + release_time) < get_current_millis())) {//current_z>0 is done to check when the hand is moving downward and a positve angular velocity is generated
-																		  // when the hand makes a hit of medium or hard intensity, the prediction factor touches atleast 35.
-																		  //release time is according to how long a standard hit takes time to be made
-		last_timestamp = get_current_millis();
-		changeCharaValue();
-		movment_counter++;
-	} else {
-		sprintf(buf, "X :%d ", movment_counter);
-		elm_object_text_set(ad->label1, buf);
+	//Record data is in listen status
+	if (strcmp(sensorStatus, statusListen) == 0) {
+		if (recordGyroCount < 20) {
+			recordGyroX[recordGyroCount] = x;
+			recordGyroY[recordGyroCount] = y;
+			recordGyroZ[recordGyroCount] = z;
+			recordGyroCount++;
+		}
 	}
-	last_z = current_z;
 }
 
 static void start_accelerator_sensor(appdata_s *ad, int af) {
@@ -778,8 +1087,10 @@ static void start_accelerator_sensor(appdata_s *ad, int af) {
 	err = sensor_create_listener(sensor_info.sensor,
 			&sensor_info.sensor_listener);
 	sensor_listener_set_event_cb(sensor_info.sensor_listener, af,
-			_new_sensor_value, ad);
+			_new_accelerometer_value, ad);
 	sensor_listener_start(sensor_info.sensor_listener);
+
+	sensorStatus = statusIdle;
 }
 
 static void start_gyroscope_sensor(appdata_s *ad, int gf) {
@@ -788,7 +1099,7 @@ static void start_gyroscope_sensor(appdata_s *ad, int gf) {
 	err = sensor_create_listener(sensor_info_gyro.sensor,
 			&sensor_info_gyro.sensor_listener);
 	sensor_listener_set_event_cb(sensor_info_gyro.sensor_listener, gf,
-			_new_gyro_value, ad);
+			_new_gyroscope_value, ad);
 	sensor_listener_start(sensor_info_gyro.sensor_listener);
 }
 static void stop_accelerator_sensor(appdata_s *ad) {
@@ -798,22 +1109,31 @@ static void stop_accelerator_sensor(appdata_s *ad) {
 static void stop_gyroscope_sensor(appdata_s *ad) {
 	sensor_listener_stop(sensor_info_gyro.sensor_listener);
 }
-
-static void changeAlgoTo(char *algo, appdata_s *ad) {
-	if (strcmp(algo, "algo1") == 0) {
-//		use the algo from Andrea
-		prediciton_factor = 7;
-		release_time = 150;
-		stop_gyroscope_sensor(ad);
-		start_accelerator_sensor(ad, af_interval);
-	} else if (strcmp(algo, "algo2") == 0) {
-//		use the algo from dipster
-		prediciton_factor = 35;
-		release_time = 170;
-		stop_accelerator_sensor(ad);
-		start_gyroscope_sensor(ad, gf_interval);
-	}
+void start_recording(appdata_s *ad) {
+	char buf[PATH_MAX];
+	start_accelerator_sensor(ad, af_interval);
+	start_gyroscope_sensor(ad, gf_interval);
 }
+void stop_recording(appdata_s *ad) {
+
+	stop_accelerator_sensor(ad);
+	stop_gyroscope_sensor(ad);
+}
+//static void changeAlgoTo(char *algo, appdata_s *ad) {
+//	if (strcmp(algo, "algo1") == 0) {
+////		use the algo from Andrea
+//		prediciton_factor = 7;
+//		release_time = 150;
+//		stop_gyroscope_sensor(ad);
+//		start_accelerator_sensor(ad, af_interval);
+//	} else if (strcmp(algo, "algo2") == 0) {
+////		use the algo from dipster
+//		prediciton_factor = 35;
+//		release_time = 170;
+//		stop_accelerator_sensor(ad);
+//		start_gyroscope_sensor(ad, gf_interval);
+//	}
+//}
 /* Button click event function */
 static void btn_clicked_init_max_acc_value(void *data, Evas_Object *obj,
 		void *event_info) {
@@ -934,6 +1254,8 @@ static bool app_create(void *data) {
 	create_base_gui(ad);
 	createService(ad);
 	create_advertise();
+
+	start_recording(ad);
 	return true;
 }
 
@@ -944,13 +1266,13 @@ static void app_control(app_control_h app_control, void *data) {
 static void app_pause(void *data) {
 	/* Take necessary actions when application becomes invisible. */
 	appdata_s *ad = data;
-	stop_accelerator_sensor(ad);
+	stop_recording(ad);
 }
 
 static void app_resume(void *data) {
 	/* Take necessary actions when application becomes visible. */
 	appdata_s *ad = data;
-	start_accelerator_sensor(ad, af_interval);
+	start_recording(ad);
 }
 
 static void app_terminate(void *data) {

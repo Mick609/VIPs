@@ -17,6 +17,9 @@ typedef struct appdata {
 } appdata_s;
 
 static void changeAlgoTo(char *algo, appdata_s *ad);
+
+
+void changeCharaValue(char *gesture);
 #ifdef  LOG_TAG
 #undef  LOG_TAG
 #endif

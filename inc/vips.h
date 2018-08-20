@@ -16,6 +16,16 @@ typedef struct appdata {
 	Evas_Object *label2; /* Maximum acceleration value */
 } appdata_s;
 
+struct Sample {
+	float x;
+	float y;
+	float z;
+};
+
+struct output{
+	float maxX;
+	float maxZ;
+};
 static void changeAlgoTo(char *algo, appdata_s *ad);
 
 

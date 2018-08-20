@@ -7,6 +7,8 @@
     </ui-application>
     <privileges>
         <privilege>http://tizen.org/privilege/bluetooth</privilege>
+        <privilege>http://tizen.org/privilege/haptic</privilege>
+        <privilege>http://tizen.org/privilege/display</privilege>
     </privileges>
     <feature name="http://tizen.org/feature/network.bluetooth.le">true</feature>
     <feature name="http://tizen.org/feature/network.bluetooth">true</feature>

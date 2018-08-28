@@ -568,8 +568,9 @@ static char* expression(void *data, float variable_1, float variable_2,
 			variable_35, variable_36, variable_37, variable_38, max);
 //	dlog_print(DLOG_INFO, LOG_TAG, buf);
 
-	if (max == variable_35 || max == variable_36) {
-
+	if (max == variable_35 || max == variable_36 || max == variable_37
+			|| max == variable_38) {
+//		if (max == variable_35 || max == variable_36) {
 //		dlog_print(DLOG_INFO, LOG_TAG, "Drum bass");
 		return "1";
 	} else {
@@ -691,7 +692,7 @@ void __bt_gatt_server_write_value_requested_cb(const char *remote_address,
 		dlog_print(DLOG_INFO, LOG_TAG, buf);
 		lastCheckConnectionTime = get_current_millis();
 	} else {
-		onConnectToControl(rpi_address);
+//		onConnectToControl(rpi_address);
 	}
 
 	char *response_value = value;
@@ -1176,21 +1177,66 @@ static void _new_accelerometer_value(sensor_h sensor,
 						+ maxminsumAccY[0] * maxminsumAccY[0]
 						+ maxminsumAccZ[0] * maxminsumAccZ[0];
 				if (euclidean_distance > 500) {
-					if (lastOutput.maxX != maxminsumAccX[0]
-							|| lastOutput.maxZ != maxminsumAccZ[0]) {
+					if (lastOutput.maxZ != maxminsumAccZ[0]) {
 						start_time = get_current_millis();
-						sprintf(buf,
-								"It is HAPPENING: %.5f: [%.5f,%.5f,%.5f] (%.5f)___lastmaxX=%.5f , lastmaxZ=%.5f",
-								euclidean_distance, maxminsumAccX[0],
-								maxminsumAccY[0], maxminsumAccZ[0], start_time,
-								lastOutput.maxX, lastOutput.maxZ);
+//						sprintf(buf,
+//								"Is it HAPPENING: %.5f: [%.5f,%.5f,%.5f] (%.5f)___lastmaxX=%.5f , lastmaxZ=%.5f",
+//								euclidean_distance, maxminsumAccX[0],
+//								maxminsumAccY[0], maxminsumAccZ[0], start_time,
+//								lastOutput.maxX, lastOutput.maxZ);
+						sprintf(buf, "");
+						for (int i = 0; i < 20; i++) {
+							sprintf(buf, "%s ; %.1f,%.1f,%.1f,%.1f,%.1f,%.1f",
+									buf, accelerometer_buf[i].x,
+									accelerometer_buf[i].y,
+									accelerometer_buf[i].z, gyroscope_buf[i].x,
+									gyroscope_buf[i].y, gyroscope_buf[i].z);
+						}
 						dlog_print(DLOG_INFO, LOG_TAG, buf);
-
-						changeCharaValue(gesture);
+//
+						sprintf(buf,
+								"%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f",
+								maxminsumAccX[0], maxminsumAccY[0],
+								maxminsumAccZ[0], maxminsumGyroX[0],
+								maxminsumGyroY[0], maxminsumGyroZ[0],
+								maxminsumAccX[1], maxminsumAccY[1],
+								maxminsumAccZ[1], maxminsumGyroX[1],
+								maxminsumGyroY[1], maxminsumGyroZ[1],
+								maxminsumAccX[2], maxminsumAccY[2],
+								maxminsumAccZ[2], maxminsumGyroX[2],
+								maxminsumGyroY[2], maxminsumGyroZ[2], SDAccX,
+								SDAccY, SDAccZ, SDGyroX, SDGyroY, SDGyroZ);
+						dlog_print(DLOG_INFO, LOG_TAG, buf);
+						if (euclidean_distance < 1500) {
+							changeCharaValue("0");
+						} else if (euclidean_distance >= 150
+								&& euclidean_distance < 3000) {
+							changeCharaValue("1");
+						} else {
+							changeCharaValue("2");
+						}
+						start_time = get_current_millis();
 						send_viberation_feedback();
 
 						lastOutput.maxX = maxminsumAccX[0];
 						lastOutput.maxZ = maxminsumAccZ[0];
+
+						for (int i = 0; i < 3; i++) {
+							maxminsumAccX[i] = 0;
+							maxminsumAccY[i] = 0;
+							maxminsumAccZ[i] = 0;
+							maxminsumGyroX[i] = 0;
+							maxminsumGyroY[i] = 0;
+							maxminsumGyroZ[i] = 0;
+						}
+						for (int i = 0; i < 20; i++) {
+							recordAccX[i] = 0;
+							recordAccY[i] = 0;
+							recordAccZ[i] = 0;
+							recordGyroX[i] = 0;
+							recordGyroY[i] = 0;
+							recordGyroZ[i] = 0;
+						}
 					}
 				}
 				gesture_count = 0;

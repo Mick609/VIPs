@@ -21,6 +21,8 @@
 //interval in millisecond for gyroscope
 #define gf_interval 5
 
+#define ICON_DIR "/opt/usr/apps/org.nussmc.vips/res/images"
+
 char buf[PATH_MAX];
 int32_t *pSampleData;
 char* source_state;
@@ -103,6 +105,16 @@ const char *time_svc_uuid_16 = "1805";
 char service_data[] = { 0x02, 0x01, 0x01 };
 
 static char *lastWrite = NULL;
+
+static char *offline_text_0 = "Please connect to";
+static char *offline_text_1 = "the Hub by restarting";
+static char *offline_text_2 = "the Hub";
+
+static char *online_text_0 = "Connected,";
+static char *online_text_1 = "time to make some";
+static char *online_text_2 = "Noise!";
+
+static char * connection_status = "offline";
 
 struct output lastOutput = { 0, 0 };
 /**
@@ -633,13 +645,20 @@ void __bt_gatt_connection_state_changed_cb(int result, bool connected,
 	appdata_s *ad = (appdata_s*) user_data;
 	char buf[PATH_MAX];
 	if (connected) {
-		elm_object_text_set(ad->label0, "Connected");
+		connection_status = "online";
+		elm_image_file_set(ad->ic, ICON_DIR"/drum.png", NULL);
+		elm_object_text_set(ad->label0, online_text_0);
+		elm_object_text_set(ad->label1, online_text_1);
+		elm_object_text_set(ad->label2, online_text_2);
 		sprintf(buf, "Connected %s", remote_address);
-		elm_object_text_set(ad->label1, buf);
+//		elm_object_text_set(ad->label1, buf);
 		dlog_print(DLOG_INFO, LOG_TAG, buf);
 	} else {
-		elm_object_text_set(ad->label0, "OFFLINE");
-		elm_object_text_set(ad->label1, "-");
+		connection_status = "offline";
+		elm_image_file_set(ad->ic, ICON_DIR"/warning.png", NULL);
+		elm_object_text_set(ad->label0, offline_text_0);
+		elm_object_text_set(ad->label1, offline_text_1);
+		elm_object_text_set(ad->label2, offline_text_2);
 		dlog_print(DLOG_INFO, LOG_TAG, "LE disconnected");
 	}
 }
@@ -685,10 +704,14 @@ void __bt_gatt_server_write_value_requested_cb(const char *remote_address,
 	dlog_print(DLOG_INFO, LOG_TAG, "write the value: %s", str);
 
 	if (strcmp(str, "connected") == 0) {
-		elm_object_text_set(ad->label0, "Connected");
+		connection_status = "online";
+		elm_image_file_set(ad->ic, ICON_DIR"/drum.png", NULL);
+		elm_object_text_set(ad->label0, online_text_0);
+		elm_object_text_set(ad->label1, online_text_1);
+		elm_object_text_set(ad->label2, online_text_2);
 		rpi_address = remote_address;
 		sprintf(buf, "%s", remote_address);
-		elm_object_text_set(ad->label1, buf);
+//		elm_object_text_set(ad->label1, buf);
 		dlog_print(DLOG_INFO, LOG_TAG, buf);
 		lastCheckConnectionTime = get_current_millis();
 	} else {
@@ -1088,8 +1111,13 @@ static void _new_accelerometer_value(sensor_h sensor,
 	}
 //	Check if the device is still on line
 	if (!isLastResponseInFiveSec()) {
-		elm_object_text_set(ad->label0, "OFFLINE");
-		elm_object_text_set(ad->label1, "-");
+		if (strcmp(connection_status, "offline") != 0) {
+			elm_image_file_set(ad->ic, ICON_DIR"/warning.png", NULL);
+			elm_object_text_set(ad->label0, offline_text_0);
+			elm_object_text_set(ad->label1, offline_text_1);
+			elm_object_text_set(ad->label2, offline_text_2);
+			connection_status = "offline";
+		}
 	}
 
 	if (sensor_data->value_count < 3)
@@ -1356,21 +1384,30 @@ static void create_base_gui(appdata_s *ad) {
 	elm_object_content_set(ad->conform, box);
 	evas_object_show(box);
 
-	/* First label (for the sensor support) */
+	ad->ic = elm_icon_add(ad->conform);
+	elm_image_file_set(ad->ic, ICON_DIR"/warning.png", NULL);
+	evas_object_size_hint_min_set(ad->ic, ELM_SCALE_SIZE(50),
+			ELM_SCALE_SIZE(50));
+	evas_object_show(ad->ic);
+	elm_box_pack_end(box, ad->ic);
+
 	ad->label0 = elm_label_add(ad->conform);
-	elm_object_text_set(ad->label0, "-");
+	elm_object_text_set(ad->label0, offline_text_0);
 	my_box_pack(box, ad->label0, 1.5, 1.0, 0.5, -1.0);
 
-	/* Second label (for the current Movemenr counter) */
 	ad->label1 = elm_label_add(ad->conform);
-	elm_object_text_set(ad->label1, "-");
+	elm_object_text_set(ad->label1, offline_text_1);
 	my_box_pack(box, ad->label1, 1.0, 1.0, 0.5, -1.0);
 
-	/* Button */
-	Evas_Object *btn2 = elm_button_add(ad->conform);
-	elm_object_text_set(btn2, "Exit");
-	evas_object_smart_callback_add(btn2, "clicked", exit_tizen, ad);
-	my_box_pack(box, btn2, 1.0, 1.0, -1.0, -1.0);
+	ad->label2 = elm_label_add(ad->conform);
+	elm_object_text_set(ad->label2, offline_text_2);
+	my_box_pack(box, ad->label2, 1.0, 1.0, 0.5, -1.0);
+
+//	/* Button */
+//	Evas_Object *btn2 = elm_button_add(ad->conform);
+//	elm_object_text_set(btn2, "Exit");
+//	evas_object_smart_callback_add(btn2, "clicked", exit_tizen, ad);
+//	my_box_pack(box, btn2, 1.0, 1.0, -1.0, -1.0);
 
 	/* Show the window after the base GUI is set up */
 	evas_object_show(ad->win);

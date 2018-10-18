@@ -12,5 +12,7 @@
     </privileges>
     <feature name="http://tizen.org/feature/network.bluetooth.le">true</feature>
     <feature name="http://tizen.org/feature/network.bluetooth">true</feature>
+    <feature name="http://tizen.org/feature/sensor.wrist_up">true</feature>
     <feature name="http://tizen.org/feature/screen.size.normal.320.320">true</feature>
+    <feature name="http://tizen.org/feature/sensor.gesture_recognition">true</feature>
 </manifest>

@@ -11,9 +11,10 @@ typedef struct appdata {
 	Evas_Object *win;
 	Evas_Object *conform;
 	Evas_Object *label;
-	Evas_Object *label0; /* write request value */
-	Evas_Object *label1; /* Current Movement counter */
-	Evas_Object *label2; /* Maximum acceleration value */
+	Evas_Object *label0;
+	Evas_Object *label1;
+	Evas_Object *label2;
+	Evas_Object *label3;
 
 	Evas_Object *ic;
 } appdata_s;

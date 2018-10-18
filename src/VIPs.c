@@ -15,6 +15,7 @@
 #include <bluetooth.h>
 #include <sensor.h> //Library for the sensor usage
 #include <math.h>
+#include <gesture_recognition.h>
 
 //interval in millisecond for accelerometer
 #define af_interval 5// 2-->500HZ, 3-->333HZ, 4-->250HZ, 5-->200HZ 10-->100HZ
@@ -89,6 +90,10 @@ bool isSuspended = false;
 float suspend_time = 200;
 float start_time = 0;
 
+float max_gyro_x = 0;
+float max_gyro_y = 0;
+float max_gyro_z = 0;
+
 struct _sensor_info {
 	sensor_h sensor; /* Sensor handle */
 	sensor_listener_h sensor_listener; /* Sensor listener */
@@ -115,6 +120,13 @@ static char *online_text_1 = "time to make some";
 static char *online_text_2 = "Noise!";
 
 static char * connection_status = "offline";
+
+static int sound_mode_index = 0;
+static char* sound_mode[] = { "0", "1" };
+static int sound_mode_size = 2;
+float last_tilt = 0;
+
+gesture_h gesture_handle;
 
 struct output lastOutput = { 0, 0 };
 /**
@@ -256,281 +268,89 @@ static char* expression(void *data, float variable_1, float variable_2,
 		float variable_23, float variable_24) {
 	appdata_s *ad = data;
 	char buf[PATH_MAX];
-
-	float scaled_variable_1 = (variable_1 - 4.44357) / 7.42772;
-	float scaled_variable_2 = (variable_2 - 1.574) / 6.50892;
-	float scaled_variable_3 = (variable_3 - 13.7528) / 4.14454;
-	float scaled_variable_4 = (variable_4 - 52.4426) / 52.5657;
-	float scaled_variable_5 = (variable_5 - 49.4163) / 67.2678;
-	float scaled_variable_6 = (variable_6 - 60.2393) / 128.759;
-	float scaled_variable_7 = (variable_7 + 3.60775) / 7.29239;
-	float scaled_variable_8 = (variable_8 + 5.36542) / 6.73846;
-	float scaled_variable_9 = (variable_9 - 8.79931) / 3.72308;
-	float scaled_variable_10 = (variable_10 + 42.9972) / 49.77;
-	float scaled_variable_11 = (variable_11 + 51.4896) / 75.0965;
-	float scaled_variable_12 = (variable_12 + 57.9253) / 119.342;
-	float scaled_variable_13 = (variable_13 - 8.19986) / 149.535;
-	float scaled_variable_14 = (variable_14 + 34.3344) / 131.039;
-	float scaled_variable_15 = (variable_15 - 229.69) / 76.7141;
-	float scaled_variable_16 = (variable_16 - 22.6874) / 704.622;
-	float scaled_variable_17 = (variable_17 + 64.8686) / 1114;
-	float scaled_variable_18 = (variable_18 - 3.1065) / 2397.29;
-	float scaled_variable_19 = variable_19 / 1.14301;
-	float scaled_variable_20 = (variable_20 - 1.04772) / 1.12272;
-	float scaled_variable_21 = (variable_21 - 0.790871) / 0.893885;
-	float scaled_variable_22 = variable_22 / 17.5914;
-	float scaled_variable_23 = variable_23 / 17.9742;
-	float scaled_variable_24 = (variable_24 - 18.6732) / 19.2369;
-
-	float y_1_1 = Logistic(
-			0.222087 - 2.0742 * scaled_variable_1 + 1.6888 * scaled_variable_2
-					+ 2.92041 * scaled_variable_3 - 0.982234 * scaled_variable_4
-					+ 3.11609 * scaled_variable_5 + 3.47787 * scaled_variable_6
-					+ 0.636268 * scaled_variable_7 - 2.97415 * scaled_variable_8
-					+ 0.599789 * scaled_variable_9
-					- 0.447892 * scaled_variable_10
-					+ 0.97525 * scaled_variable_11
-					- 1.95557 * scaled_variable_12
-					+ 4.71596 * scaled_variable_13
-					+ 2.00837 * scaled_variable_14
-					+ 2.38064 * scaled_variable_15
-					+ 0.0909202 * scaled_variable_16
-					- 3.06462 * scaled_variable_17
-					+ 0.256928 * scaled_variable_18
-					- 1.01312 * scaled_variable_19
-					+ 0.0263702 * scaled_variable_20
-					+ 0.137403 * scaled_variable_21
-					+ 0.0694326 * scaled_variable_22
-					+ 1.18604 * scaled_variable_23
-					+ 0.400576 * scaled_variable_24);
-	float y_1_2 = Logistic(
-			-3.08323 + 4.73328 * scaled_variable_1
-					+ 0.178124 * scaled_variable_2 - 3.03808 * scaled_variable_3
-					- 0.460915 * scaled_variable_4
-					- 0.628708 * scaled_variable_5 - 1.1211 * scaled_variable_6
-					+ 0.621832 * scaled_variable_7 + 2.37792 * scaled_variable_8
-					- 0.0146665 * scaled_variable_9
-					- 0.20538 * scaled_variable_10
-					- 5.47224 * scaled_variable_11
-					+ 0.866518 * scaled_variable_12
-					+ 4.48826 * scaled_variable_13
-					+ 0.86196 * scaled_variable_14
-					- 4.55489 * scaled_variable_15
-					+ 0.806068 * scaled_variable_16
-					- 0.624694 * scaled_variable_17
-					+ 2.03943 * scaled_variable_18
-					+ 0.796782 * scaled_variable_19
-					+ 0.500147 * scaled_variable_20
-					- 0.467777 * scaled_variable_21
-					+ 0.394663 * scaled_variable_22
-					+ 2.52779 * scaled_variable_23
-					- 2.34684 * scaled_variable_24);
-	float y_1_3 = Logistic(
-			-3.01638 - 0.73635 * scaled_variable_1 - 3.19755 * scaled_variable_2
-					+ 3.07284 * scaled_variable_3 + 1.72924 * scaled_variable_4
-					- 0.0577498 * scaled_variable_5
-					- 1.63622 * scaled_variable_6 - 3.31771 * scaled_variable_7
-					+ 2.65699 * scaled_variable_8 + 1.07467 * scaled_variable_9
-					- 0.924247 * scaled_variable_10
-					- 4.02852 * scaled_variable_11
-					- 0.120932 * scaled_variable_12
-					- 0.81634 * scaled_variable_13
-					+ 0.455927 * scaled_variable_14
-					- 0.684022 * scaled_variable_15
-					- 2.54619 * scaled_variable_16
-					- 0.605234 * scaled_variable_17
-					- 0.916299 * scaled_variable_18
-					+ 0.338701 * scaled_variable_19
-					+ 0.988952 * scaled_variable_20
-					- 0.732314 * scaled_variable_21
-					- 1.33948 * scaled_variable_22
-					+ 2.77691 * scaled_variable_23
-					- 1.07909 * scaled_variable_24);
-	float y_1_4 = Logistic(
-			1.98285 - 0.222461 * scaled_variable_1 + 3.7426 * scaled_variable_2
-					+ 0.197274 * scaled_variable_3
-					+ 0.415513 * scaled_variable_4 - 4.63573 * scaled_variable_5
-					+ 2.79129 * scaled_variable_6 + 4.11055 * scaled_variable_7
-					+ 1.67112 * scaled_variable_8 - 3.09763 * scaled_variable_9
-					+ 1.04394 * scaled_variable_10
-					- 7.48129 * scaled_variable_11
-					+ 4.89379 * scaled_variable_12
-					- 4.68947 * scaled_variable_13
-					- 2.02343 * scaled_variable_14
-					- 1.49951 * scaled_variable_15
-					- 1.13526 * scaled_variable_16
-					- 3.39209 * scaled_variable_17
-					+ 1.40129 * scaled_variable_18
-					+ 0.446235 * scaled_variable_19
-					- 1.10117 * scaled_variable_20
-					+ 0.358631 * scaled_variable_21
-					- 1.26391 * scaled_variable_22
-					+ 0.382607 * scaled_variable_23
-					+ 2.93938 * scaled_variable_24);
-	float y_1_5 = Logistic(
-			-0.518736 - 2.34031 * scaled_variable_1
-					- 0.506546 * scaled_variable_2 - 4.24759 * scaled_variable_3
-					+ 0.528312 * scaled_variable_4 + 3.95051 * scaled_variable_5
-					+ 1.92157 * scaled_variable_6 - 2.67904 * scaled_variable_7
-					+ 1.3787 * scaled_variable_8 + 2.78677 * scaled_variable_9
-					- 2.12845 * scaled_variable_10
-					+ 5.79772 * scaled_variable_11
-					+ 5.84512 * scaled_variable_12
-					+ 1.93741 * scaled_variable_13 - 1.8697 * scaled_variable_14
-					+ 0.68067 * scaled_variable_15
-					+ 0.930661 * scaled_variable_16
-					+ 3.17497 * scaled_variable_17
-					+ 1.89596 * scaled_variable_18
-					- 1.85733 * scaled_variable_19
-					- 4.72877 * scaled_variable_20
-					+ 0.36538 * scaled_variable_21
-					+ 1.47655 * scaled_variable_22
-					- 2.34288 * scaled_variable_23
-					+ 1.74566 * scaled_variable_24);
-	float y_1_6 = Logistic(
-			-1.78749 - 2.61696 * scaled_variable_1 - 1.24237 * scaled_variable_2
-					+ 4.93702 * scaled_variable_3 - 1.45568 * scaled_variable_4
-					+ 0.635477 * scaled_variable_5 - 2.1074 * scaled_variable_6
-					- 1.39884 * scaled_variable_7 + 0.59044 * scaled_variable_8
-					+ 0.575174 * scaled_variable_9
-					+ 1.07237 * scaled_variable_10
-					+ 0.0991586 * scaled_variable_11
-					+ 2.23753 * scaled_variable_12
-					- 3.23744 * scaled_variable_13
-					- 1.07829 * scaled_variable_14 + 4.5359 * scaled_variable_15
-					+ 0.535224 * scaled_variable_16
-					- 0.953146 * scaled_variable_17
-					- 0.908539 * scaled_variable_18
-					+ 0.419963 * scaled_variable_19
-					- 0.257779 * scaled_variable_20
-					+ 1.2603 * scaled_variable_21 - 2.18138 * scaled_variable_22
-					- 1.59185 * scaled_variable_23
-					- 3.90929 * scaled_variable_24);
-	float y_1_7 = Logistic(
-			-0.160982 + 5.16012 * scaled_variable_1
-					- 3.06222 * scaled_variable_2 - 4.63777 * scaled_variable_3
-					+ 0.94515 * scaled_variable_4
-					+ 0.0694836 * scaled_variable_5
-					- 0.604845 * scaled_variable_6 - 5.17515 * scaled_variable_7
-					- 0.426673 * scaled_variable_8
-					+ 0.967055 * scaled_variable_9
-					+ 3.67924 * scaled_variable_10
-					+ 2.77413 * scaled_variable_11
-					- 7.26354 * scaled_variable_12
-					- 2.78942 * scaled_variable_13
-					+ 0.234382 * scaled_variable_14
-					- 2.90787 * scaled_variable_15
-					+ 0.649799 * scaled_variable_16
-					- 2.55437 * scaled_variable_17
-					- 2.91144 * scaled_variable_18
-					+ 0.754254 * scaled_variable_19
-					+ 2.47609 * scaled_variable_20
-					+ 0.0996498 * scaled_variable_21
-					- 0.683339 * scaled_variable_22
-					+ 0.521782 * scaled_variable_23
-					- 1.79071 * scaled_variable_24);
-	float y_1_8 = Logistic(
-			1.47859 - 6.56247 * scaled_variable_1 - 0.564416 * scaled_variable_2
-					- 1.18662 * scaled_variable_3 + 1.52118 * scaled_variable_4
-					- 3.24069 * scaled_variable_5 - 1.70944 * scaled_variable_6
-					- 2.3609 * scaled_variable_7 - 1.26838 * scaled_variable_8
-					- 0.311241 * scaled_variable_9
-					+ 0.00115299 * scaled_variable_10
-					- 1.38178 * scaled_variable_11
-					+ 0.415684 * scaled_variable_12
-					- 3.35173 * scaled_variable_13
-					- 0.881467 * scaled_variable_14
-					- 1.12595 * scaled_variable_15
-					- 0.286534 * scaled_variable_16
-					+ 1.7052 * scaled_variable_17
-					+ 0.040945 * scaled_variable_18
-					- 0.549157 * scaled_variable_19
-					- 1.01798 * scaled_variable_20
-					- 0.207082 * scaled_variable_21
-					- 0.277727 * scaled_variable_22
-					- 1.49586 * scaled_variable_23
-					- 1.36929 * scaled_variable_24);
-	float y_1_9 = Logistic(
-			-1.93245 + 5.21733 * scaled_variable_1
-					+ 0.195366 * scaled_variable_2
-					+ 0.407802 * scaled_variable_3
-					- 0.0503092 * scaled_variable_4
-					+ 4.62798 * scaled_variable_5 + 3.34439 * scaled_variable_6
-					- 5.01545 * scaled_variable_7 - 2.919 * scaled_variable_8
-					+ 5.18901 * scaled_variable_9 + 1.75371 * scaled_variable_10
-					+ 4.72472 * scaled_variable_11
-					- 1.08917 * scaled_variable_12
-					+ 0.486976 * scaled_variable_13
-					- 4.32044 * scaled_variable_14 - 2.1025 * scaled_variable_15
-					- 3.62776 * scaled_variable_16
-					- 4.12175 * scaled_variable_17
-					- 0.436417 * scaled_variable_18
-					+ 3.0494 * scaled_variable_19
-					- 0.0742354 * scaled_variable_20
-					- 0.708905 * scaled_variable_21
-					+ 1.2688 * scaled_variable_22
-					- 0.582327 * scaled_variable_23
-					+ 3.55654 * scaled_variable_24);
-
-	float non_probabilistic_variable_25 = Logistic(
-			-2.75554 - 8.20916 * y_1_1 + 14.4578 * y_1_2 - 8.83539 * y_1_3
-					- 9.09127 * y_1_4 - 5.68543 * y_1_5 - 4.95698 * y_1_6
-					- 10.2787 * y_1_7 + 10.8485 * y_1_8 - 5.3022 * y_1_9);
-	float non_probabilistic_variable_26 = Logistic(
-			-15.0593 - 6.98879 * y_1_1 - 6.9385 * y_1_2 - 13.0662 * y_1_3
-					+ 8.59811 * y_1_4 + 7.88239 * y_1_5 + 5.3944 * y_1_6
-					+ 9.69 * y_1_7 - 1.0117 * y_1_8 - 1.71163 * y_1_9);
-	float non_probabilistic_variable_27 = Logistic(
-			-3.25382 - 10.374 * y_1_1 - 7.49961 * y_1_2 - 0.45778 * y_1_3
-					+ 9.783 * y_1_4 - 6.52136 * y_1_5 + 4.56078 * y_1_6
-					+ 4.49589 * y_1_7 - 9.53601 * y_1_8 + 1.67271 * y_1_9);
-	float non_probabilistic_variable_28 = Logistic(
-			-5.97108 + 3.59715 * y_1_1 + 3.38646 * y_1_2 - 1.58226 * y_1_3
-					- 8.84914 * y_1_4 + 2.4599 * y_1_5 - 6.91453 * y_1_6
-					- 7.69226 * y_1_7 - 4.0404 * y_1_8 + 1.99444 * y_1_9);
-	float non_probabilistic_variable_29 = Logistic(
-			-4.99944 - 9.27849 * y_1_1 - 2.56634 * y_1_2 + 5.70902 * y_1_3
-					- 4.29829 * y_1_4 + 7.36848 * y_1_5 - 5.27376 * y_1_6
-					+ 4.09612 * y_1_7 - 8.52374 * y_1_8 + 2.32156 * y_1_9);
-	float non_probabilistic_variable_30 = Logistic(
-			-7.49626 - 1.00933 * y_1_1 + 2.21916 * y_1_2 + 10.557 * y_1_3
-					+ 0.447209 * y_1_4 - 7.19128 * y_1_5 - 10.9998 * y_1_6
-					+ 2.60512 * y_1_7 - 1.96308 * y_1_8 - 2.40328 * y_1_9);
-	float non_probabilistic_variable_31 = Logistic(
-			-0.158353 - 9.6291 * y_1_1 - 4.72336 * y_1_2 - 5.43226 * y_1_3
-					- 5.01717 * y_1_4 - 7.03416 * y_1_5 - 2.97407 * y_1_6
-					+ 0.833101 * y_1_7 + 3.1853 * y_1_8 + 2.43552 * y_1_9);
-	float non_probabilistic_variable_32 = Logistic(
-			-5.95004 + 9.32853 * y_1_1 - 4.4747 * y_1_2 - 3.48932 * y_1_3
-					- 5.04803 * y_1_4 - 5.81369 * y_1_5 - 5.23065 * y_1_6
-					+ 4.62038 * y_1_7 - 3.91041 * y_1_8 - 1.61246 * y_1_9);
-	float non_probabilistic_variable_33 = Logistic(
-			-4.23315 + 1.93077 * y_1_1 - 10.1472 * y_1_2 - 2.07241 * y_1_3
-					+ 5.39941 * y_1_4 + 3.70951 * y_1_5 - 8.62422 * y_1_6
-					- 3.58146 * y_1_7 + 0.171549 * y_1_8 - 1.45552 * y_1_9);
-	float non_probabilistic_variable_34 = Logistic(
-			-3.85692 + 4.15469 * y_1_1 + 2.06141 * y_1_2 - 8.14449 * y_1_3
-					+ 4.26265 * y_1_4 - 9.04846 * y_1_5 - 4.70944 * y_1_6
-					- 7.23961 * y_1_7 - 3.17997 * y_1_8 - 0.458751 * y_1_9);
-	float non_probabilistic_variable_35 = Logistic(
-			-11.6866 - 0.885041 * y_1_1 - 3.44905 * y_1_2 + 6.31082 * y_1_3
-					- 1.9955 * y_1_4 - 1.2568 * y_1_5 + 4.53827 * y_1_6
-					- 9.68371 * y_1_7 - 2.61097 * y_1_8 + 10.9349 * y_1_9);
-	float non_probabilistic_variable_36 = Logistic(
-			-5.02655 - 5.21262 * y_1_1 + 3.87302 * y_1_2 + 4.37755 * y_1_3
-					+ 1.75915 * y_1_4 - 2.89541 * y_1_5 + 6.18876 * y_1_6
-					- 3.88309 * y_1_7 - 10.728 * y_1_8 - 9.7661 * y_1_9);
-	float non_probabilistic_variable_37 = Logistic(
-			-7.8414 + 2.15406 * y_1_1 - 1.76372 * y_1_2 + 4.04725 * y_1_3
-					- 4.44912 * y_1_4 - 5.12996 * y_1_5 + 2.4727 * y_1_6
-					- 9.82024 * y_1_7 + 9.94306 * y_1_8 - 11.1294 * y_1_9);
-	float non_probabilistic_variable_38 = Logistic(
-			-1.53583 + 1.2369 * y_1_1 - 3.55257 * y_1_2 - 5.84919 * y_1_3
-					- 4.69287 * y_1_4 + 1.87907 * y_1_5 + 5.72664 * y_1_6
-					- 3.92164 * y_1_7 - 6.6347 * y_1_8 - 6.27139 * y_1_9);
 	float softmax[14];
 	float *pointer;
 	int i;
+
+	float scaled_variable_1 = 2 * (variable_1 + 21.2) / (67.3 + 21.2) - 1;
+	float scaled_variable_3 = 2 * (variable_3 + 16.6) / (29.1 + 16.6) - 1;
+	float scaled_variable_5 = 2 * (variable_5 + 255.4) / (675.4 + 255.4) - 1;
+	float scaled_variable_6 = 2 * (variable_6 + 269.3) / (622.7 + 269.3) - 1;
+	float scaled_variable_7 = 2 * (variable_7 + 83.5) / (24.4 + 83.5) - 1;
+	float scaled_variable_11 = 2 * (variable_11 + 786.7) / (272.2 + 786.7) - 1;
+	float scaled_variable_12 = 2 * (variable_12 + 578.9) / (239.3 + 578.9) - 1;
+	float scaled_variable_13 = 2 * (variable_13 + 658.6) / (652.3 + 658.6) - 1;
+	float scaled_variable_15 = 2 * (variable_15 + 536.8) / (510.3 + 536.8) - 1;
+	float scaled_variable_19 = 2 * (variable_19 - 0) / (25.8 - 0) - 1;
+	float scaled_variable_20 = 2 * (variable_20 - 0) / (17.2 - 0) - 1;
+	float scaled_variable_21 = 2 * (variable_21 - 0) / (14.6 - 0) - 1;
+	float scaled_variable_23 = 2 * (variable_23 - 0) / (346.6 - 0) - 1;
+	float scaled_variable_24 = 2 * (variable_24 - 0) / (245.9 - 0) - 1;
+	float y_1_1 = Logistic(
+			3.84693 + 0.864156 * scaled_variable_1
+					+ 0.0126722 * scaled_variable_3
+					+ 2.22452 * scaled_variable_5 + 4.99815 * scaled_variable_6
+					- 3.8777 * scaled_variable_7 + 2.53394 * scaled_variable_11
+					- 0.56755 * scaled_variable_12 + 6.7284 * scaled_variable_13
+					+ 0.0243029 * scaled_variable_15
+					- 2.55245 * scaled_variable_19
+					- 0.122452 * scaled_variable_20
+					+ 1.97159 * scaled_variable_21
+					+ 2.35748 * scaled_variable_23
+					+ 0.25102 * scaled_variable_24);
+	float y_1_2 = Logistic(
+			0.997523 - 1.25573 * scaled_variable_1 + 1.46679 * scaled_variable_3
+					+ 2.04299 * scaled_variable_5 + 3.13009 * scaled_variable_6
+					- 5.64739 * scaled_variable_7
+					- 0.163151 * scaled_variable_11
+					+ 0.1696 * scaled_variable_12 - 4.81621 * scaled_variable_13
+					+ 1.25942 * scaled_variable_15
+					- 0.646767 * scaled_variable_19
+					+ 0.0837131 * scaled_variable_20
+					+ 0.456602 * scaled_variable_21
+					+ 0.0542992 * scaled_variable_23
+					- 0.65525 * scaled_variable_24);
+	float y_1_3 = Logistic(
+			-0.275492 + 0.404695 * scaled_variable_1
+					- 1.18241 * scaled_variable_3 + 5.22998 * scaled_variable_5
+					- 7.09059 * scaled_variable_6 - 3.66479 * scaled_variable_7
+					- 3.33964 * scaled_variable_11
+					+ 5.85238 * scaled_variable_12
+					+ 2.86495 * scaled_variable_13
+					+ 3.89582 * scaled_variable_15
+					- 2.76323 * scaled_variable_19
+					- 2.45958 * scaled_variable_20
+					+ 2.67848 * scaled_variable_21
+					- 0.153801 * scaled_variable_23
+					+ 1.69358 * scaled_variable_24);
+	float non_probabilistic_variable_25 = Logistic(
+			0.10008 - 11.0926 * y_1_1 - 12.0078 * y_1_2 + 2.59008 * y_1_3);
+	float non_probabilistic_variable_26 = Logistic(
+			0.421917 - 11.4324 * y_1_1 - 9.15654 * y_1_2 + 1.03497 * y_1_3);
+	float non_probabilistic_variable_27 = Logistic(
+			-27.8116 - 6.18631 * y_1_1 + 30.6264 * y_1_2 - 0.264297 * y_1_3);
+	float non_probabilistic_variable_28 = Logistic(
+			-11.2204 + 12.0866 * y_1_1 - 22.0974 * y_1_2 + 0.530628 * y_1_3);
+	float non_probabilistic_variable_29 = Logistic(
+			-4.50881 + 2.76866 * y_1_1 + 0.389287 * y_1_2 - 0.0636301 * y_1_3);
+	float non_probabilistic_variable_30 = Logistic(
+			2.48191 - 28.6614 * y_1_1 + 1.14825 * y_1_2 - 6.98153 * y_1_3);
+	float non_probabilistic_variable_31 = Logistic(
+			1.45718 - 2.79353 * y_1_1 - 4.62369 * y_1_2 - 13.5486 * y_1_3);
+	float non_probabilistic_variable_32 = Logistic(
+			0.925857 + 0.10625 * y_1_1 - 31.5662 * y_1_2 - 10.3392 * y_1_3);
+	float non_probabilistic_variable_33 = Logistic(
+			-6.23481 + 2.58449 * y_1_1 + 7.94667 * y_1_2 - 25.2398 * y_1_3);
+	float non_probabilistic_variable_34 = Logistic(
+			-14.8453 + 19.4954 * y_1_1 - 6.39813 * y_1_2 - 20.7147 * y_1_3);
+	float non_probabilistic_variable_35 = Logistic(
+			-24.6592 + 3.64919 * y_1_1 + 8.69399 * y_1_2 + 16.9344 * y_1_3);
+	float non_probabilistic_variable_36 = Logistic(
+			-20.0204 - 5.88453 * y_1_1 - 29.1113 * y_1_2 + 28.4171 * y_1_3);
+	float non_probabilistic_variable_37 = Logistic(
+			-9.96975 - 11.4451 * y_1_1 + 0.907963 * y_1_2 + 13.1933 * y_1_3);
+	float non_probabilistic_variable_38 = Logistic(
+			-10.8856 + 2.51423 * y_1_1 - 2.12679 * y_1_2 + 9.08299 * y_1_3);
 
 	pointer = Softmax(non_probabilistic_variable_25,
 			non_probabilistic_variable_26, non_probabilistic_variable_27,
@@ -580,8 +400,7 @@ static char* expression(void *data, float variable_1, float variable_2,
 			variable_35, variable_36, variable_37, variable_38, max);
 //	dlog_print(DLOG_INFO, LOG_TAG, buf);
 
-	if (max == variable_35 || max == variable_36 || max == variable_37
-			|| max == variable_38) {
+	if (max == variable_35 || max == variable_36) {
 //		if (max == variable_35 || max == variable_36) {
 //		dlog_print(DLOG_INFO, LOG_TAG, "Drum bass");
 		return "1";
@@ -1086,6 +905,19 @@ static float get_absolute_max(float value1, float value2) {
 
 /*******************************ACCELEROMETER AND PREDICTION***********************************/
 /*********************************************************************************************/
+
+void change_sound_mode(void *user_data) {
+	appdata_s *ad = (appdata_s*) user_data;
+	char buf[PATH_MAX];
+	int sound_size = sound_mode_size;
+	if (sound_mode_index < (sound_size - 1)) {
+		sound_mode_index = sound_mode_index + 1;
+	} else {
+		sound_mode_index = 0;
+	}
+	sprintf(buf, "Sound_mode: %s",sound_mode[sound_mode_index]);
+	elm_object_text_set(ad->label3, buf);
+}
 void send_viberation_feedback() {
 	int ret;
 	ret = feedback_initialize();
@@ -1099,7 +931,14 @@ void send_viberation_feedback() {
 				get_error_message(ret));
 	}
 }
+void erase(void *user_data) {
+	appdata_s *ad = (appdata_s*) user_data;
 
+	max_gyro_x = 0;
+	max_gyro_y = 0;
+	max_gyro_z = 0;
+
+}
 static void _new_accelerometer_value(sensor_h sensor,
 		sensor_event_s *sensor_data, void *user_data) {
 	appdata_s *ad = (appdata_s*) user_data;
@@ -1186,6 +1025,22 @@ static void _new_accelerometer_value(sensor_h sensor,
 			float SDGyroY = calculateSD(recordGyroY);
 			float SDGyroZ = calculateSD(recordGyroZ);
 
+//			if (maxminsumGyroX[0] > max_gyro_x || maxminsumGyroY[0] > max_gyro_y
+//					|| maxminsumGyroZ[0] > max_gyro_z) {
+//				if (maxminsumGyroX[0] > max_gyro_x) {
+//					max_gyro_x = maxminsumGyroX[0];
+//				}
+//				if (maxminsumGyroY[0] > max_gyro_y) {
+//					max_gyro_y = maxminsumGyroY[0];
+//				}
+//				if (maxminsumGyroZ[0] > max_gyro_z) {
+//					max_gyro_z = maxminsumGyroZ[0];
+//				}
+//				sprintf(buf, "Max_Gyro_xyz: %.f   %.f   %.f", max_gyro_x,
+//						max_gyro_y, max_gyro_z);
+//				dlog_print(DLOG_INFO, LOG_TAG, buf);
+//			}
+
 			char* gesture = expression(ad, maxminsumAccX[0], maxminsumAccY[0],
 					maxminsumAccZ[0], maxminsumGyroX[0], maxminsumGyroY[0],
 					maxminsumGyroZ[0], maxminsumAccX[1], maxminsumAccY[1],
@@ -1197,6 +1052,20 @@ static void _new_accelerometer_value(sensor_h sensor,
 
 			if (strcmp(gesture, "0") == 0) {
 				gesture_count = 0;
+
+				if (maxminsumGyroX[0] > 250 && maxminsumGyroY[0] > 80
+						&& maxminsumGyroZ[0] > 80) {
+					float current_time = get_current_millis();
+					if (current_time - last_tilt > 300) {
+//						sprintf(buf, "maxminsumGyroX: %.f   %.f   %.f",
+//								maxminsumGyroX[0], maxminsumGyroY[0],
+//								maxminsumGyroZ[0]);
+						dlog_print(DLOG_INFO, LOG_TAG, buf);
+						last_tilt = get_current_millis();
+						change_sound_mode(ad);
+						send_viberation_feedback();
+					}
+				}
 			} else {
 				gesture_count++;
 			}
@@ -1207,44 +1076,21 @@ static void _new_accelerometer_value(sensor_h sensor,
 				if (euclidean_distance > 500) {
 					if (lastOutput.maxZ != maxminsumAccZ[0]) {
 						start_time = get_current_millis();
-//						sprintf(buf,
-//								"Is it HAPPENING: %.5f: [%.5f,%.5f,%.5f] (%.5f)___lastmaxX=%.5f , lastmaxZ=%.5f",
-//								euclidean_distance, maxminsumAccX[0],
-//								maxminsumAccY[0], maxminsumAccZ[0], start_time,
-//								lastOutput.maxX, lastOutput.maxZ);
+
 						sprintf(buf, "");
-						for (int i = 0; i < 20; i++) {
-							sprintf(buf, "%s ; %.1f,%.1f,%.1f,%.1f,%.1f,%.1f",
-									buf, accelerometer_buf[i].x,
-									accelerometer_buf[i].y,
-									accelerometer_buf[i].z, gyroscope_buf[i].x,
-									gyroscope_buf[i].y, gyroscope_buf[i].z);
-						}
-						dlog_print(DLOG_INFO, LOG_TAG, buf);
-//
-						sprintf(buf,
-								"%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f",
-								maxminsumAccX[0], maxminsumAccY[0],
-								maxminsumAccZ[0], maxminsumGyroX[0],
-								maxminsumGyroY[0], maxminsumGyroZ[0],
-								maxminsumAccX[1], maxminsumAccY[1],
-								maxminsumAccZ[1], maxminsumGyroX[1],
-								maxminsumGyroY[1], maxminsumGyroZ[1],
-								maxminsumAccX[2], maxminsumAccY[2],
-								maxminsumAccZ[2], maxminsumGyroX[2],
-								maxminsumGyroY[2], maxminsumGyroZ[2], SDAccX,
-								SDAccY, SDAccZ, SDGyroX, SDGyroY, SDGyroZ);
-						dlog_print(DLOG_INFO, LOG_TAG, buf);
 						if (euclidean_distance < 1500) {
-							changeCharaValue("0");
+							sprintf(buf, "0%s", sound_mode[sound_mode_index]);
 						} else if (euclidean_distance >= 150
 								&& euclidean_distance < 3000) {
-							changeCharaValue("1");
+							sprintf(buf, "1%s", sound_mode[sound_mode_index]);
 						} else {
-							changeCharaValue("2");
+							sprintf(buf, "2%s", sound_mode[sound_mode_index]);
 						}
+						changeCharaValue(buf);
+
 						start_time = get_current_millis();
 						send_viberation_feedback();
+						dlog_print(DLOG_INFO, LOG_TAG, "Drum: %s", buf);
 
 						lastOutput.maxX = maxminsumAccX[0];
 						lastOutput.maxZ = maxminsumAccZ[0];
@@ -1403,10 +1249,14 @@ static void create_base_gui(appdata_s *ad) {
 	elm_object_text_set(ad->label2, offline_text_2);
 	my_box_pack(box, ad->label2, 1.0, 1.0, 0.5, -1.0);
 
+	ad->label3 = elm_label_add(ad->conform);
+	elm_object_text_set(ad->label3, "Sound_mode: 0");
+	my_box_pack(box, ad->label3, 1.0, 1.0, 0.5, -1.0);
+
 //	/* Button */
 //	Evas_Object *btn2 = elm_button_add(ad->conform);
-//	elm_object_text_set(btn2, "Exit");
-//	evas_object_smart_callback_add(btn2, "clicked", exit_tizen, ad);
+//	elm_object_text_set(btn2, "erase");
+//	evas_object_smart_callback_add(btn2, "clicked", erase, ad);
 //	my_box_pack(box, btn2, 1.0, 1.0, -1.0, -1.0);
 
 	/* Show the window after the base GUI is set up */
@@ -1430,6 +1280,8 @@ static bool app_create(void *data) {
 
 	start_recording(ad);
 
+//	start_gesture_recognition(ad);
+
 	return true;
 }
 
@@ -1447,7 +1299,7 @@ static void app_resume(void *data) {
 	/* Take necessary actions when application becomes visible. */
 	appdata_s *ad = data;
 	start_recording(ad);
-
+//	start_gesture_recognition(ad);
 	int ret = efl_util_set_window_screen_mode(ad->win,
 			EFL_UTIL_SCREEN_MODE_ALWAYS_ON);
 	if (ret != EFL_UTIL_ERROR_NONE) {
@@ -1477,6 +1329,8 @@ static void app_terminate(void *data) {
 	if (ret != BT_ERROR_NONE)
 		dlog_print(DLOG_ERROR, LOG_TAG, "[bt_deinitialize] failed.");
 	stop_accelerator_sensor(ad);
+	gesture_stop_recognition(gesture_handle);
+	gesture_release(gesture_handle);
 }
 
 static void ui_app_lang_changed(app_event_info_h event_info, void *user_data) {
